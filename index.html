@@ -210,6 +210,60 @@
   box-shadow: var(--shadow-lift);
 }
 
+/* ============ Premium modal + locked content (Workshops module) ============ */
+.premium-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: color-mix(in oklab, var(--color-foreground) 45%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.premium-modal {
+  width: 100%;
+  max-width: 30rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.locked-panel {
+  position: relative;
+  overflow: hidden;
+}
+.locked-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  background-color: color-mix(in oklab, var(--color-glass) 35%, transparent);
+  pointer-events: none;
+}
+.locked-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background-color: color-mix(in oklab, var(--clay) 55%, transparent);
+  color: var(--color-foreground);
+}
+.plan-option {
+  cursor: pointer;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.plan-option:hover { transform: translateY(-3px); }
+.plan-option.selected {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
 .animate-breathe { animation: breathe 9s ease-in-out infinite; }
 .animate-float-slow { animation: floaty 11s ease-in-out infinite; }
 .animate-float-mid { animation: floaty 8s ease-in-out infinite; }
@@ -445,6 +499,14 @@ function logOut() {
   try { window.localStorage.removeItem(AUTH_KEYS.loggedIn); } catch (e) {}
   window.location.hash = '';
   window.location.reload();
+}
+/* ============ Premium (Workshops recordings/courses paywall) ============ */
+const PREMIUM_KEY = 'mindspace:premium:v1';
+function isPremium() {
+  try { return window.localStorage.getItem(PREMIUM_KEY) === '1'; } catch (e) { return false; }
+}
+function setPremium(value) {
+  try { window.localStorage.setItem(PREMIUM_KEY, value ? '1' : '0'); } catch (e) {}
 }
 
 function seededRandom(seed) {
@@ -1667,31 +1729,180 @@ const guideReplies = [
   { keys: ['join', 'chat', 'group'],
     text: 'Tap Join Workshop, then Enter Group Chat — the room opens 15 minutes before each session so you can settle in without pressure.' },
 ];
+const recordingsList = [
+  { t: 'Exam Stress Management · Week 1', dur: '38 min', tag: 'Recording', free: true },
+  { t: 'Mindfulness Workshop · Grounding Basics', dur: '24 min', tag: 'Recording', free: true },
+  { t: 'Better Sleep Workshop · Wind-Down Routines', dur: '31 min', tag: 'Recording', free: false },
+  { t: 'Confidence Building · Full Series (5 sessions)', dur: '2 hr 40 min', tag: 'Recording', free: false },
+  { t: 'Digital Detox · Q&A Highlights', dur: '19 min', tag: 'Recording', free: false },
+  { t: 'Emotional Resilience · Full Series (6 sessions)', dur: '3 hr 05 min', tag: 'Recording', free: false },
+];
+const coursesList = [
+  { t: 'Foundations of Calm', desc: 'A self-paced primer on breathing, grounding and gentle routines.', lessons: 6, level: 'Beginner', free: true },
+  { t: 'Study Without Spiraling', desc: 'Turn exam pressure into a workable weekly rhythm.', lessons: 8, level: 'Beginner', free: false },
+  { t: 'Sleep Reset', desc: 'A structured two-week course to rebuild a steady wind-down routine.', lessons: 10, level: 'Intermediate', free: false },
+  { t: 'Confidence, Rebuilt', desc: 'Guided reflection and practice for social and academic confidence.', lessons: 9, level: 'Intermediate', free: false },
+];
+const premiumFeatures = [
+  'Every workshop recording, past and present',
+  'All self-paced courses, unlocked at once',
+  'Downloadable session guides and worksheets',
+  'Priority spots in live group workshops',
+];
+const premiumPlans = [
+  { id: 'monthly', label: 'Monthly', price: '₹249', per: '/month' },
+  { id: 'yearly', label: 'Yearly', price: '₹1,999', per: '/year', badge: 'Best value' },
+];
+
+function PremiumModal(props) {
+  const onClose = props.onClose, onUnlock = props.onUnlock;
+  const [plan, setPlan] = useState('yearly');
+  const [working, setWorking] = useState(false);
+  function confirm() {
+    setWorking(true);
+    setTimeout(function () { setWorking(false); onUnlock(); }, 600);
+  }
+  return h('div', {
+    className: 'premium-overlay', role: 'dialog', 'aria-modal': true, 'aria-label': 'Upgrade to MindSpace Premium',
+    onClick: function (e) { if (e.target === e.currentTarget) onClose(); },
+  },
+    h('div', { className: 'premium-modal glass-panel rounded-3xl p-6 sm:p-8' },
+      h('div', { className: 'flex items-start justify-between gap-4' },
+        h(Pill, null, 'MindSpace Premium'),
+        h('button', {
+          type: 'button', onClick: onClose, 'aria-label': 'Close',
+          className: 'rounded-full px-2 py-1 text-sm text-muted-foreground hover:text-foreground',
+        }, '✕')
+      ),
+      h('h2', { className: 'mt-4 text-2xl leading-tight' }, 'Unlock recordings & courses'),
+      h('p', { className: 'mt-2 text-sm text-muted-foreground' }, 'Get full access to every workshop recording and self-paced course in the library.'),
+      h('ul', { className: 'mt-5 space-y-2' },
+        premiumFeatures.map(function (f) {
+          return h('li', { key: f, className: 'flex items-start gap-2 text-sm' },
+            h('span', { className: 'mt-0.5 text-primary', 'aria-hidden': true }, '✓'),
+            h('span', null, f)
+          );
+        })
+      ),
+      h('div', { className: 'mt-6 grid gap-3 sm:grid-cols-2' },
+        premiumPlans.map(function (p) {
+          const selected = plan === p.id;
+          return h('button', {
+            key: p.id, type: 'button', onClick: function () { setPlan(p.id); },
+            className: cn('plan-option glass-soft rounded-2xl p-4 text-left', selected ? 'selected' : ''),
+          },
+            h('div', { className: 'flex items-center justify-between' },
+              h('span', { className: 'text-sm font-medium' }, p.label),
+              p.badge ? h(Pill, { className: 'text-[10px]' }, p.badge) : null
+            ),
+            h('p', { className: 'mt-2 font-display text-xl' }, p.price, h('span', { className: 'text-sm text-muted-foreground' }, ' ' + p.per))
+          );
+        })
+      ),
+      h(ActionButton, {
+        variant: 'primary', size: 'lg', className: 'mt-6 w-full', onClick: confirm, disabled: working,
+      }, working ? 'Unlocking…' : 'Continue'),
+      h('p', { className: 'mt-3 text-center text-xs text-muted-foreground' }, 'Demo checkout — no payment is actually collected.')
+    )
+  );
+}
+
+function LockedNotice(props) {
+  const onUnlock = props.onUnlock;
+  return h('div', { className: 'mt-3 flex items-center justify-between gap-3' },
+    h('span', { className: 'locked-tag' }, '🔒 Premium'),
+    h(ActionButton, { size: 'sm', variant: 'outline', onClick: onUnlock }, 'Get Premium')
+  );
+}
 
 function WorkshopsPage() {
+  const [premium, setPremiumFlag] = useState(function () { return isPremium(); });
+  const [showPremium, setShowPremium] = useState(false);
+  function requestUnlock() { setShowPremium(true); }
+  function completeUnlock() {
+    setPremium(true);
+    setPremiumFlag(true);
+    setShowPremium(false);
+  }
   return h(ModuleShell, {
     moduleIndex: 7, title: 'Grow in a group', tagline: 'Group workshops.',
-    intro: 'Student-led wellness workshops with weekly activities, communities, group chat, activity tracking and motivational badges — all in the connected space below.',
+    intro: 'Student-led wellness workshops with weekly activities, communities, group chat, activity tracking and motivational badges.',
     actions: h(React.Fragment, null,
       h(ActionLink, { to: '/achievements' }, 'View Badges'),
-      h(ActionLink, { to: '/community' }, 'MindSpace Community')
+      h(ActionLink, { to: '/community' }, 'MindSpace Community'),
+      premium
+        ? h(Pill, { className: 'text-primary' }, '✓ Premium active')
+        : h(ActionButton, { variant: 'primary', onClick: requestUnlock }, 'Get Premium')
     ),
   },
     h('section', null,
       h(SectionTitle, {
-        eyebrow: 'Workshop space', title: 'Open the group workshop hub',
-        lead: 'Browse workshops, join communities, log activities and cheer on your peers — everything below lives in its own connected module.',
+        eyebrow: 'Workshop space', title: 'Browse live group workshops',
+        lead: 'Join communities, log activities and cheer on your peers — everything runs inside MindSpace, no separate app required.',
       }),
-      h('div', { className: 'glass-panel mt-6 overflow-hidden rounded-3xl', style: { padding: 0 } },
-        h('iframe', {
-          src: 'workshop.html',
-          title: 'MindSpace Group Workshops',
-          className: 'block w-full',
-          style: { height: '860px', border: '0', borderRadius: 'inherit' },
-          loading: 'lazy',
+      h('div', { className: 'mt-6 grid gap-4 sm:grid-cols-2' },
+        workshopsList.map(function (w) {
+          return h(Panel, { key: w.t, className: 'lift-on-hover' },
+            h('div', { className: 'flex items-start justify-between gap-3' },
+              h('div', null,
+                h('p', { className: 'text-sm font-medium' }, w.t),
+                h('p', { className: 'mt-1 text-xs text-muted-foreground' }, w.people + ' members · ' + w.weeks + ' · ' + w.when)
+              ),
+              h('span', { className: 'grid h-10 w-10 shrink-0 place-items-center blob-a bg-gradient-to-br from-clay/70 to-sage/40 text-sm' }, '◈')
+            ),
+            h('div', { className: 'mt-4' },
+              h(Bar, { value: w.pct, label: w.pct > 0 ? 'Your progress' : 'Not started', hint: w.pct + '%' })
+            ),
+            h('div', { className: 'mt-5 flex flex-wrap gap-2' },
+              h(ActionButton, { size: 'sm', variant: 'primary' }, w.pct > 0 ? 'Continue Workshop' : 'Join Workshop'),
+              h(ActionLink, { to: '/community', size: 'sm', variant: 'ghost' }, 'Enter Group Chat')
+            )
+          );
         })
       )
-    )
+    ),
+    h('section', null,
+      h(SectionTitle, {
+        eyebrow: 'Watch anytime', title: 'Session recordings',
+        lead: premium ? 'Every recording in the library is unlocked for you.' : 'A couple of recordings are open to everyone — the rest unlock with Premium.',
+      }),
+      h('div', { className: 'mt-6 grid gap-4 sm:grid-cols-2' },
+        recordingsList.map(function (r) {
+          const unlocked = premium || r.free;
+          return h(Panel, { key: r.t, className: unlocked ? 'lift-on-hover' : 'locked-panel' },
+            h(Pill, null, r.tag),
+            h('p', { className: 'mt-3 text-sm font-medium' }, r.t),
+            h('p', { className: 'mt-1 text-xs text-muted-foreground' }, r.dur),
+            unlocked
+              ? h(ActionButton, { size: 'sm', variant: 'outline', className: 'mt-4' }, 'Watch recording')
+              : h(LockedNotice, { onUnlock: requestUnlock })
+          );
+        })
+      )
+    ),
+    h('section', null,
+      h(SectionTitle, {
+        eyebrow: 'Learn at your pace', title: 'Self-paced courses',
+        lead: premium ? 'All courses are unlocked for you.' : 'Start with a free course, or get Premium to unlock the full library.',
+      }),
+      h('div', { className: 'mt-6 grid gap-4 sm:grid-cols-2' },
+        coursesList.map(function (c) {
+          const unlocked = premium || c.free;
+          return h(Panel, { key: c.t, className: unlocked ? 'lift-on-hover' : 'locked-panel' },
+            h('div', { className: 'flex items-center justify-between gap-2' },
+              h(Pill, null, c.level),
+              h('span', { className: 'text-xs text-muted-foreground' }, c.lessons + ' lessons')
+            ),
+            h('p', { className: 'mt-3 text-sm font-medium' }, c.t),
+            h('p', { className: 'mt-1 text-xs text-muted-foreground' }, c.desc),
+            unlocked
+              ? h(ActionButton, { size: 'sm', variant: 'outline', className: 'mt-4' }, 'Start course')
+              : h(LockedNotice, { onUnlock: requestUnlock })
+          );
+        })
+      )
+    ),
+    showPremium ? h(PremiumModal, { onClose: function () { setShowPremium(false); }, onUnlock: completeUnlock }) : null
   );
 }
 /* ============ Achievements page (module 8) ============ */
